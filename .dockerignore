@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.endgrain/
+.pytest_cache/
+.git
+scripts
+static/dev
+
+**/__pycache__/
+**/*.py[cod]
