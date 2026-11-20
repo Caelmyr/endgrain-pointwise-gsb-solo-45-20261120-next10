@@ -239,3 +239,28 @@ dialog::backdrop { background:#2630208c; }
  .lot-inputs { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .probe-content { grid-template-columns:1fr; }
 }
+.facematch-candidates { display:grid; gap:6px; }
+.facematch-option { border:1px solid var(--line); border-radius:6px; padding:9px 11px; background:var(--white); }
+.facematch-option small { display:block; color:var(--muted); font-weight:400; margin-top:2px; }
+.fm-card { border:1px solid var(--line); border-left:5px solid var(--muted); border-radius:7px; padding:14px; margin-top:14px; background:#fbfaf3; }
+.fm-card.verdict-same { border-left-color:#4f7a45; }
+.fm-card.verdict-different { border-left-color:var(--danger); }
+.fm-card.verdict-inconclusive { border-left-color:#c08a3e; }
+.fm-card header { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-bottom:10px; }
+.fm-candidate-title { font-size:14px; }
+.fm-verdict { font-size:11px; font-weight:750; padding:4px 9px; border-radius:20px; }
+.verdict-same .fm-verdict { background:#dfe8d4; color:#38512f; }
+.verdict-different .fm-verdict { background:#f3ddd4; color:#7b3a28; }
+.verdict-inconclusive .fm-verdict { background:#f1e3cb; color:#8a6326; }
+.fm-disposition { font-size:11px; color:var(--muted); }
+.fm-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:10px; }
+.fm-metric { background:#efefe5; border-radius:5px; padding:7px; }
+.fm-metric span { display:block; font-size:10px; color:var(--muted); }
+.fm-metric strong { display:block; margin-top:3px; font-size:15px; font-variant-numeric:tabular-nums; }
+.fm-sheet { display:block; width:100%; max-width:100%; height:auto; border-radius:6px; border:1px solid #393f37; margin:8px 0; }
+.fm-decide { margin-top:10px; }
+.fm-history-row { display:flex; flex-wrap:wrap; align-items:center; gap:9px; justify-content:space-between; padding:9px 0; border-top:1px solid var(--line); }
+.fm-history-row small { display:block; color:var(--muted); margin-top:2px; }
+@media(max-width:820px) {
+ .fm-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}

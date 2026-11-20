@@ -7,7 +7,7 @@ from typing import Any
 from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge, UnsupportedMediaType
 
-from . import calibration_preview, comparison, exchange, lots, measurements, plates, probe, recipes, reports, workspaces
+from . import calibration_preview, comparison, exchange, face_matches, facematch, lots, measurements, plates, probe, recipes, reports, workspaces
 from .captures import (
     SURFACES, image_etag, ingest_inspection, ingest_reference, select_references,
 )
@@ -400,5 +400,27 @@ def create_app(data_folder: str | None = None) -> Flask:
     @app.get("/api/lots/survey.csv")
     def lot_table():
         return binary(lots.to_csv(survey_query()), "text/csv", name="endgrain-lot-survey.csv")
+
+    @app.get("/api/inspections/<inspection_id>/face-match-candidates")
+    def face_match_candidates(inspection_id):
+        return jsonify({"items": face_matches.candidate_options(db, inspection_id)})
+
+    @app.get("/api/inspections/<inspection_id>/face-matches")
+    def face_match_history(inspection_id):
+        return jsonify({"items": face_matches.history(db, inspection_id)})
+
+    @app.post("/api/face-matches/screen")
+    def face_match_screen():
+        return jsonify({"items": face_matches.screen(db, read_document())}), 201
+
+    @app.post("/api/face-matches/<match_id>/decision")
+    def face_match_decision(match_id):
+        return jsonify(face_matches.decide(db, match_id, read_document()))
+
+    @app.get("/api/face-matches/<match_id>/sheet.png")
+    def face_match_sheet(match_id):
+        document = face_matches.sheet_document(db, match_id)
+        return binary(facematch.evidence_sheet(db, document), "image/png",
+                      name=f"endgrain-face-match-{match_id[:10]}.png")
 
     return app

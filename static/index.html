@@ -22,6 +22,7 @@
     <nav class="main-nav" aria-label="Workbench views">
       <button type="button" data-view="inspect" class="active">Inspect</button>
       <button type="button" data-view="compare">Compare</button>
+      <button type="button" data-view="facematch">Face match</button>
       <button type="button" data-view="reports">Reports</button>
       <button type="button" data-view="recipes">Recipes</button>
       <button type="button" data-view="lots">Lots</button>
@@ -217,6 +218,34 @@
             </div>
           </form>
           <div id="recipe-summary" class="comparison-output"></div>
+        </section>
+      </section>
+
+      <section id="facematch-view" class="tab-view" hidden>
+        <header class="work-head">
+          <div>
+            <div class="small-label">RE-PHOTO CHECK</div>
+            <h2>Match an end face</h2>
+            <p id="facematch-subtitle" class="subtle"></p>
+          </div>
+        </header>
+        <section class="panel recipe-panel">
+          <h3>Choose same-lot records to check against this re-photo</h3>
+          <form id="facematch-form" class="stack-form">
+            <div id="facematch-candidates" class="facematch-candidates"></div>
+            <p class="subtle" id="facematch-hint">
+              The machine suggests matches but never confirms them. A narrow strip of repeated rings or two
+              near-equal candidates is reported as insufficient evidence. Confirm or reject each result yourself.
+            </p>
+            <div class="panel-actions">
+              <button type="submit" class="button strong">Screen selected records</button>
+            </div>
+          </form>
+          <div id="facematch-results" aria-live="polite"></div>
+        </section>
+        <section class="panel recipe-panel">
+          <h3>Earlier checks for this face</h3>
+          <div id="facematch-history"></div>
         </section>
       </section>
 

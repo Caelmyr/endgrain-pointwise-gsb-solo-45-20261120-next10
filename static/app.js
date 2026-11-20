@@ -1,5 +1,6 @@
 import {WorkbenchViewer} from "./viewer.js";
 import {enterLots, enterRecipes, showProbe, wireExtras} from "./extras.js";
+import {enterFaceMatch, wireFaceMatch} from "./facematch.js";
 import {
   button, createToolInput, displayValue, el, link, metricCards, notices,
   objectTable, plot, shortTime, table,
@@ -172,6 +173,7 @@ function enterPanel() {
   if (state.view === "reports") renderReports().catch(error => notify(error.message, true));
   if (state.view === "recipes") enterRecipes(extrasContext()).catch(error => notify(error.message, true));
   if (state.view === "lots") enterLots(extrasContext()).catch(error => notify(error.message, true));
+  if (state.view === "facematch") enterFaceMatch(extrasContext()).catch(error => notify(error.message, true));
 }
 
 function renderAll() {
@@ -182,7 +184,7 @@ function renderAll() {
     item.disabled = !ready && item.dataset.view !== "inspect";
   });
   $("#empty").hidden = ready;
-  ["inspect", "compare", "reports", "recipes", "lots"].forEach(key => { $("#" + key + "-view").hidden = !ready || active !== key; });
+  ["inspect", "compare", "facematch", "reports", "recipes", "lots"].forEach(key => { $("#" + key + "-view").hidden = !ready || active !== key; });
   $("#controls").hidden = !ready || active !== "inspect";
   renderLibrary();
   if (!ready) return;
@@ -795,6 +797,7 @@ function wire() {
 async function boot() {
   wire();
   wireExtras(extrasContext());
+  wireFaceMatch(extrasContext());
   const catalogue = await api("/api/tools");
   state.tools = new Map(catalogue.tools.map(tool => [tool.id, tool]));
   await reloadLibrary();

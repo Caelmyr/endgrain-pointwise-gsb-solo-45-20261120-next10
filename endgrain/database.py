@@ -83,11 +83,26 @@ CREATE TABLE IF NOT EXISTS recipes (
     recipe TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS face_matches (
+    id TEXT PRIMARY KEY,
+    query_inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    candidate_inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    query_capture_id TEXT NOT NULL,
+    candidate_capture_id TEXT NOT NULL,
+    verdict TEXT NOT NULL,
+    disposition TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    result TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(query_inspection_id, candidate_inspection_id)
+);
 CREATE INDEX IF NOT EXISTS inspection_order ON inspections(updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS run_order ON runs(inspection_id, revision DESC, created_at DESC, id);
 CREATE INDEX IF NOT EXISTS note_order ON notes(inspection_id, revision, created_at DESC);
 CREATE INDEX IF NOT EXISTS report_order ON reports(inspection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_order ON events(inspection_id, pk DESC);
+CREATE INDEX IF NOT EXISTS face_match_order ON face_matches(query_inspection_id, updated_at DESC);
 """
 
 INSPECTION_SELECT = """
@@ -520,3 +535,96 @@ class Database:
             )
             self.event(conn, inspection_id, expected, "report_issued", {"report_id": report_id, "digest": digest})
         return {"id": report_id, "manifest": manifest, "digest": digest, "revision": expected, "created_at": created}
+
+    def face_match_on(self, conn: sqlite3.Connection, match_id: str) -> dict:
+        row = conn.execute("SELECT * FROM face_matches WHERE id = ?", (match_id,)).fetchone()
+        if row is None:
+            raise Missing("Face match")
+        return as_dict(row, "evidence", "result")
+
+    def face_match(self, match_id: str) -> dict:
+        with self.connection() as conn:
+            return self.face_match_on(conn, match_id)
+
+    def face_match_between(self, conn: sqlite3.Connection, query_id: str, candidate_id: str) -> dict | None:
+        row = conn.execute(
+            "SELECT * FROM face_matches WHERE query_inspection_id = ? AND candidate_inspection_id = ?",
+            (query_id, candidate_id),
+        ).fetchone()
+        return as_dict(row, "evidence", "result") if row is not None else None
+
+    def face_matches(self, inspection_id: str) -> list[dict]:
+        with self.connection() as conn:
+            self.inspection_on(conn, inspection_id)
+            rows = conn.execute(
+                """SELECT * FROM face_matches
+                   WHERE query_inspection_id = ? OR candidate_inspection_id = ?
+                   ORDER BY updated_at DESC, id LIMIT 120""",
+                (inspection_id, inspection_id),
+            ).fetchall()
+        return [as_dict(row, "evidence", "result") for row in rows]
+
+    def upsert_face_match(self, payload: dict) -> dict:
+        """Store a screening result, keeping a prior human disposition only
+        while the two source photographs are unchanged."""
+        with self.transaction() as conn:
+            prior = self.face_match_between(
+                conn, payload["query_inspection_id"], payload["candidate_inspection_id"]
+            )
+            now = timestamp()
+            if prior is not None:
+                same_sources = (
+                    prior["query_capture_id"] == payload["query_capture_id"]
+                    and prior["candidate_capture_id"] == payload["candidate_capture_id"]
+                )
+                disposition = prior["disposition"] if same_sources else "undecided"
+                conn.execute(
+                    """UPDATE face_matches SET verdict = ?, disposition = ?, evidence = ?,
+                       result = ?, query_capture_id = ?, candidate_capture_id = ?, updated_at = ?
+                       WHERE id = ?""",
+                    (
+                        payload["verdict"], disposition, encode(payload["evidence"]),
+                        encode(payload["result"]), payload["query_capture_id"],
+                        payload["candidate_capture_id"], now, prior["id"],
+                    ),
+                )
+                match_id = prior["id"]
+            else:
+                match_id = identifier()
+                conn.execute(
+                    """INSERT INTO face_matches
+                       (id,query_inspection_id,candidate_inspection_id,query_capture_id,
+                        candidate_capture_id,verdict,disposition,evidence,result,created_at,updated_at)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        match_id, payload["query_inspection_id"], payload["candidate_inspection_id"],
+                        payload["query_capture_id"], payload["candidate_capture_id"],
+                        payload["verdict"], "undecided", encode(payload["evidence"]),
+                        encode(payload["result"]), now, now,
+                    ),
+                )
+            self.event(
+                conn, payload["query_inspection_id"],
+                conn.execute(
+                    "SELECT revision FROM inspections WHERE id = ?", (payload["query_inspection_id"],)
+                ).fetchone()["revision"],
+                "face_match_screened",
+                {"candidate_inspection_id": payload["candidate_inspection_id"], "verdict": payload["verdict"]},
+            )
+            return self.face_match_on(conn, match_id)
+
+    def set_face_match_disposition(self, match_id: str, disposition: str, note: str) -> dict:
+        with self.transaction() as conn:
+            current = self.face_match_on(conn, match_id)
+            conn.execute(
+                "UPDATE face_matches SET disposition = ?, updated_at = ? WHERE id = ?",
+                (disposition, timestamp(), match_id),
+            )
+            inspection = self.inspection_on(conn, current["query_inspection_id"])
+            self.event(
+                conn, current["query_inspection_id"], inspection["revision"],
+                "face_match_decided",
+                {"match_id": match_id, "candidate_inspection_id": current["candidate_inspection_id"],
+                 "disposition": disposition, "note": note},
+            )
+            return self.face_match_on(conn, match_id)
