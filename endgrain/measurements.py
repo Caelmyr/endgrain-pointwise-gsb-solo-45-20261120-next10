@@ -92,12 +92,14 @@ TOOLS = {
         rings.RING_COLUMNS, rings.normalize_params, rings.measure,
     ),
     "cracks": Tool(
-        "cracks", "Crack traces", "Trace connected dark checks and assess their width, branching and length.",
+        "cracks", "Crack traces",
+        "Trace connected dark checks, then review each branch between forks with lengths that add back to the whole trace.",
         [
             control("contrast", "Crack contrast", 0.14, step=0.01),
             control("scale", "Background radius (px)", 6, step=1),
             control("minimum_length", "Minimum length (px)", 13, step=1),
             control("bridge", "Gap closing radius (px)", 1, step=1),
+            control("edge_margin", "Edge contact tolerance (px)", 2, step=0.5),
         ],
         {
             "traces": ("Trace components", "count"),
@@ -106,6 +108,10 @@ TOOLS = {
             "edge_traces": ("At support edge", "count"),
             "internal_traces": ("Interior traces", "count"),
             "trace_area_fraction": ("Trace area", "%"),
+            "segments": ("Review segments", "count"),
+            "segment_length": ("Segmented length", "linear"),
+            "fork_length": ("Held at forks", "linear"),
+            "boundary_segments": ("At a cut edge", "count"),
         },
         cracks.CRACK_COLUMNS, cracks.normalize_params, cracks.measure,
     ),
@@ -248,12 +254,17 @@ def describe_run(run: dict) -> dict:
     tool = TOOLS.get(run["kind"])
     item["title"] = tool.title if tool else run["kind"]
     url = "/api/inspections/" + run["inspection_id"] + "/runs/" + run["id"]
-    item["links"] = {"preview": url + "/preview.png", "csv": url + "/table.csv", "data": url}
+    links = {"preview": url + "/preview.png", "csv": url + "/table.csv", "data": url}
+    views = run.get("views")
+    if views:
+        links["views"] = {name: url + "/view/" + name + ".png" for name in views}
+    item["links"] = links
     return item
 
 
 def calculate(frame, tool: Tool, params: dict, *, recipe: dict | None = None) -> dict:
     result, visual, rows = tool.measure(frame.raster, params)
+    preview, extra = as_previews(visual)
     snapshot = {
         "source_digest": frame.inspection["source_digest"],
         "state": frame.inspection["state"],
@@ -267,9 +278,19 @@ def calculate(frame, tool: Tool, params: dict, *, recipe: dict | None = None) ->
         "params": params,
         "snapshot": snapshot,
         "result": json_ready(result),
-        "preview": encode_png(visual),
+        "preview": preview,
+        "views": sorted(extra),
+        "view_payloads": extra,
         "table_data": {"columns": tool.columns, "rows": json_ready(rows)},
     }
+
+
+def as_previews(visual) -> tuple[bytes, dict[str, bytes]]:
+    """Accept either one overlay or a mapping of named overlays from a tool."""
+    if isinstance(visual, dict):
+        prepared = {name: encode_png(picture) for name, picture in visual.items()}
+        return prepared["traces"], {name: value for name, value in prepared.items() if name != "traces"}
+    return encode_png(visual), {}
 
 
 def execute(db: Database, inspection_id: str, raw: Any) -> dict:

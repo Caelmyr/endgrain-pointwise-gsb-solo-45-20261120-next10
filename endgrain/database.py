@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS runs (
     snapshot TEXT NOT NULL,
     result TEXT NOT NULL,
     preview BLOB NOT NULL,
+    views BLOB NOT NULL DEFAULT x'',
     table_data TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -95,7 +96,7 @@ SELECT i.*, c.title AS capture_title, c.digest AS source_digest, c.metadata AS c
 FROM inspections i JOIN captures c ON i.capture_id = c.id
 """
 
-RUN_FIELDS = "id, inspection_id, revision, kind, params, snapshot, result, created_at"
+RUN_FIELDS = "id, inspection_id, revision, kind, params, snapshot, result, views, created_at"
 CAPTURE_FIELDS = "id, title, digest, metadata, created_at"
 
 
@@ -109,6 +110,35 @@ def identifier() -> str:
 
 def encode(value) -> str:
     return json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+
+
+def views_blob(views: dict[str, bytes] | None) -> bytes:
+    """Encode optional supplementary overlays as one compact length-prefixed blob."""
+    if not views:
+        return b""
+    header: list[dict] = []
+    payload = bytearray()
+    for name in sorted(views):
+        content = views[name]
+        header.append({"name": name, "offset": len(payload), "size": len(content)})
+        payload += content
+    envelope = {"entries": header, "length": len(payload)}
+    prefix = encode(envelope).encode("utf-8")
+    return len(prefix).to_bytes(4, "big") + prefix + bytes(payload)
+
+
+def read_views(blob: bytes | None) -> dict[str, bytes]:
+    if not blob:
+        return {}
+    size = int.from_bytes(blob[:4], "big")
+    envelope = json.loads(blob[4:4 + size].decode("utf-8"))
+    payload = blob[4 + size:]
+    if len(payload) != envelope["length"]:
+        raise ValueError("Stored overlays are damaged.")
+    return {
+        item["name"]: payload[item["offset"]:item["offset"] + item["size"]]
+        for item in envelope["entries"]
+    }
 
 
 def as_dict(row: sqlite3.Row, *structured: str) -> dict:
@@ -126,6 +156,14 @@ class Database:
         with self.connection() as conn:
             conn.execute("PRAGMA journal_mode = WAL")
             conn.executescript(SCHEMA)
+            self.migrate(conn)
+
+    @staticmethod
+    def migrate(conn: sqlite3.Connection) -> None:
+        """Add columns introduced after an installation was first created."""
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(runs)")}
+        if "views" not in columns:
+            conn.execute("ALTER TABLE runs ADD COLUMN views BLOB NOT NULL DEFAULT x''")
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -361,8 +399,8 @@ class Database:
         run_id = identifier()
         conn.execute(
             """INSERT INTO runs
-               (id,inspection_id,revision,kind,params,snapshot,result,preview,table_data,created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               (id,inspection_id,revision,kind,params,snapshot,result,preview,views,table_data,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 run_id,
                 inspection_id,
@@ -372,6 +410,7 @@ class Database:
                 encode(values["snapshot"]),
                 encode(values["result"]),
                 values["preview"],
+                views_blob(values.get("view_payloads")),
                 encode(values["table_data"]),
                 timestamp(),
             ),
@@ -386,7 +425,9 @@ class Database:
         ).fetchone()
         if row is None:
             raise Missing("Measurement")
-        return as_dict(row, "params", "snapshot", "result")
+        result = as_dict(row, "params", "snapshot", "result")
+        result["views"] = sorted(read_views(result.pop("views")))
+        return result
 
     def run(self, inspection_id: str, run_id: str) -> dict:
         with self.connection() as conn:
@@ -400,10 +441,15 @@ class Database:
                     ORDER BY revision DESC, created_at DESC, id LIMIT ?""",
                 (inspection_id, limit),
             ).fetchall()
-        return [as_dict(row, "params", "snapshot", "result") for row in rows]
+        results = []
+        for row in rows:
+            item = as_dict(row, "params", "snapshot", "result")
+            item["views"] = sorted(read_views(item.pop("views")))
+            results.append(item)
+        return results
 
     def run_attachment(self, inspection_id: str, run_id: str, category: str) -> bytes | dict:
-        columns = {"preview": "preview", "table": "table_data"}
+        columns = {"preview": "preview", "table": "table_data", "views": "views"}
         with self.connection() as conn:
             row = conn.execute(
                 f"SELECT {columns[category]} FROM runs WHERE inspection_id = ? AND id = ?",
@@ -413,7 +459,22 @@ class Database:
             raise Missing("Measurement")
         if category == "table":
             return json.loads(row[0])
+        if category == "views":
+            return list(read_views(row[0]))
         return row[0]
+
+    def run_view(self, inspection_id: str, run_id: str, name: str) -> bytes:
+        with self.connection() as conn:
+            row = conn.execute(
+                "SELECT views FROM runs WHERE inspection_id = ? AND id = ?",
+                (inspection_id, run_id),
+            ).fetchone()
+        if row is None:
+            raise Missing("Measurement")
+        views = read_views(row[0])
+        if name not in views:
+            raise Missing("Overlay view")
+        return views[name]
 
     def add_note(self, inspection_id: str, revision: int, payload: dict) -> dict:
         note_id = identifier()

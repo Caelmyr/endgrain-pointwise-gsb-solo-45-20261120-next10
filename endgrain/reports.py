@@ -133,7 +133,7 @@ def metadata_rows(inspection: dict) -> str:
     return "".join("<dt>" + escape(name) + "</dt><dd>" + escape(value or "—") + "</dd>" for name, value in details.items())
 
 
-def measurement_section(record: dict, image_url: str, csv_url: str) -> str:
+def measurement_section(record: dict, image_url: str, csv_url: str, extra_images: list[tuple[str, str]] | None = None) -> str:
     kind = TOOLS[record["kind"]]
     outcome = record["result"]
     metric_values = outcome["metrics"]
@@ -146,11 +146,18 @@ def measurement_section(record: dict, image_url: str, csv_url: str) -> str:
         for key, value in record["params"].items()
     ]
     notices = "".join("<li>" + escape(notice) + "</li>" for notice in outcome["notices"])
+    extra = "".join(
+        '<figure><img src="' + escape(url, quote=True) + '" alt="' + escape(caption, quote=True) + '">'
+        '<figcaption>' + escape(caption) + '</figcaption></figure>'
+        for caption, url in (extra_images or [])
+    )
     return (
         '<section class="measurement">'
         '<h2>' + escape(kind.title) + '</h2>'
         '<p>' + escape(kind.description) + '</p>'
-        '<figure><img src="' + escape(image_url, quote=True) + '" alt="' + escape(kind.title, quote=True) + ' overlay"></figure>'
+        '<figure><img src="' + escape(image_url, quote=True) + '" alt="' + escape(kind.title, quote=True) + ' overlay">'
+        '<figcaption>' + escape("Trace overlay") + '</figcaption></figure>'
+        + extra +
         '<table>' + "".join(lines) + '</table>'
         '<ul>' + notices + '</ul>'
         '<p><a href="' + escape(csv_url, quote=True) + '">Download measurement table</a></p>'
@@ -192,7 +199,8 @@ dd { margin: 0 0 .3em; }
 table { width: 100%; border-collapse: collapse; }
 th,td { text-align: left; padding: .45em .6em; border-bottom: 1px solid #cccabb; }
 figure { margin: 0; }
-figure img { display: block; max-width: 100%; max-height: 460px; margin: 0 auto 20px; }
+figure img { display: block; max-width: 100%; max-height: 460px; margin: 0 auto 6px; }
+figcaption { color: #59604b; font-size: .82rem; margin: 0 0 15px; }
 code { overflow-wrap: anywhere; }
 .summary { white-space: pre-wrap; }
 a { color: #4b6049; }
@@ -216,7 +224,11 @@ def render_print(report: dict, *, offline: bool = False) -> str:
         endpoint = root + "/runs/" + run["id"]
         image_url = name + ".png" if offline else endpoint + "/preview.png"
         csv_url = name + ".csv" if offline else endpoint + "/table.csv"
-        sections.append(measurement_section(run, image_url, csv_url))
+        extra = []
+        for view in run.get("views") or []:
+            view_url = name + "-" + view + ".png" if offline else endpoint + "/view/" + view + ".png"
+            extra.append(("Segment review overlay" if view == "segments" else "Trace and segment review", view_url))
+        sections.append(measurement_section(run, image_url, csv_url, extra))
     scope_url = "scope.png" if offline else root + "/reports/" + report["id"] + "/scope.png"
     scope = '<figure><img src="' + escape(scope_url, quote=True) + '" alt="Source and measuring support with calibration and markers"></figure>'
     disposition = DISPOSITIONS[review["disposition"]]

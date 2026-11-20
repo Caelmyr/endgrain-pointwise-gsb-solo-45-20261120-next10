@@ -210,6 +210,12 @@ def create_app(data_folder: str | None = None) -> Flask:
         name = f"endgrain-overlay-{run_id[:10]}.png" if request.args.get("download") == "1" else None
         return binary(result, "image/png", name=name, etag=run_id, immutable=True)
 
+    @app.get("/api/inspections/<inspection_id>/runs/<run_id>/view/<view>.png")
+    def run_view(inspection_id, run_id, view):
+        result = db.run_view(inspection_id, run_id, view)
+        name = f"endgrain-{view}-{run_id[:10]}.png" if request.args.get("download") == "1" else None
+        return binary(result, "image/png", name=name, etag=run_id + "-" + view, immutable=True)
+
     @app.get("/api/inspections/<inspection_id>/runs/<run_id>/table.csv")
     def measurement_table(inspection_id, run_id):
         table = reports.export_run_csv(db, inspection_id, run_id)

@@ -17,7 +17,7 @@ For a Python 3.11 environment, install `requirements.txt` and run `./start.sh`. 
 1. Import a single face photograph or open the synthetic samples. The synthetic white oak has a branching check and growth-ring bands. The synthetic walnut includes a brighter area and two tones. The synthetic ash has periodic saw marks.
 2. Calibrate with a measured ruler or rectify four corners of a known rectangle. Click the source points in order. The Grid view displays the selected plane and the ruler length or grid spacing. Draw a simple polygon using **Region** to limit analysis.
 3. Optionally attach a flat-field reference from the same setup. The reference must have the same oriented dimensions. Use the Lighting view to check gain and unsupported reference locations.
-4. Run a measurement. Results include an overlay, summary, and a downloadable CSV. Use the Pixel probe on the working image for a magnified patch, source mapping and luminance profiles. Add review markers by clicking locations in the selected measuring region.
+4. Run a measurement. Results include an overlay, summary, and a downloadable CSV. Use the Pixel probe on the working image for a magnified patch, source mapping and luminance profiles. Add review markers by clicking locations in the selected measuring region. Crack readings add a saved segment overlay and a side-by-side review sheet, and each segment row can be selected to highlight its span.
 5. Compare two saved measurements of the same kind. A color difference overlay is available when they share a source, plane, region and lighting settings. The Recipes tab can replay selected tool settings on a second inspection. The Lots tab screens saved readings and exports a slide of face overlays and a CSV.
 6. Include current measurements in a report and download its evidence ZIP. It contains source material, the measuring setup illustration, overlays, tables, the manifest and checksums. The separate inspection exchange ZIP carries the original capture, settings, attached lighting reference and current markers into a separate record on restore.
 
@@ -25,7 +25,7 @@ For a Python 3.11 environment, install `requirements.txt` and run `./start.sh`. 
 
 - **Capture quality** shows channel clipping, low-detail regions, glare-like pixels and supported coverage.
 - **Annual ring transect** samples a narrow band and suggests contrast boundaries. Inspect or replace the candidates before interpreting the distances as growth increments.
-- **Crack traces** estimates skeleton lengths and dark-region widths. It identifies branch and edge-touching regions as review candidates.
+- **Crack traces** estimates skeleton lengths and dark-region widths. It identifies branch and edge-touching regions as review candidates. A segment review splits each trace at its forks so every branch carries its own visible length and end-to-end labels. Segment and fork lengths add back to the whole-trace total, forks hold the short length that cannot be assigned to one branch, and ends that stop at the selected region or the image edge are marked as cut rather than as natural tips.
 - **Vessel pores** estimates component diameter, area and density from compact dark regions.
 - **Grain orientation** maps axial texture and represents ambiguous local orientation separately from reliable regions.
 - **Saw chatter** measures texture power within an axis and wavelength band in overlapping windows.
@@ -43,4 +43,4 @@ A change to measuring setup starts a new revision. Older results stay in measure
 
 ## Source layout
 
-`endgrain/` contains image ingest, geometry, measurement, SQLite, and report logic. `static/` contains the browser workbench. `app.py` runs the Waitress server. `scripts/count_backend.py` can count Python backend source.
+`endgrain/` contains image ingest, geometry, measurement, SQLite, and report logic. `static/` contains the browser workbench. `app.py` runs the Waitress server. `scripts/count_backend.py` can count Python backend source. `tests/` holds the crack segmentation invariants; run them with `python -m pytest tests` when pytest is available.

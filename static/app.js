@@ -15,7 +15,7 @@ const state = {
   selectionEpoch: 0, queryEpoch: 0,
 };
 
-const viewer = new WorkbenchViewer(coordinate);
+const viewer = new WorkbenchViewer(coordinate, pickSegment);
 let noticeTimer;
 
 function currentApi(tail = "") {
@@ -145,6 +145,7 @@ async function openInspection(inspectionId, activate = false) {
   state.selectedRun = state.runs.find(item => item.revision === record.revision) || null;
   state.image = "working";
   if (activate) state.view = "inspect";
+  hideSegmentReadout();
   $("#report-title").value = record.title + " inspection";
   $("#compare-output").replaceChildren();
   renderAll();
@@ -316,6 +317,8 @@ function renderImage() {
   const record = state.current;
   if (!record) return;
   const showResult = state.image === "result" && state.selectedRun;
+  const showSegments = state.image === "segments" && state.selectedRun?.links.views?.segments;
+  if (!showSegments) hideSegmentReadout();
   const showGain = state.image === "gain" && record.state.lighting;
   const resultRun = state.selectedRun;
   let mode = state.image;
@@ -333,24 +336,30 @@ function renderImage() {
     url = resultRun.links.preview;
     title = resultRun.title + " overlay";
   }
+  if (showSegments) {
+    url = resultRun.links.views.segments;
+    title = resultRun.title + " segment review";
+  }
   if (showGain) {
     url = currentApi("/lighting.png?view=gain&r=" + record.revision);
     title = "Illumination gain map";
   }
-  if ((mode === "result" && !showResult) || (mode === "gain" && !showGain)) mode = "working";
-  const plane = showResult ? resultRun.snapshot.plane : record.plane;
+  if ((mode === "result" && !showResult) || (mode === "segments" && !showSegments) || (mode === "gain" && !showGain)) mode = "working";
+  const plane = showResult || showSegments ? resultRun.snapshot.plane : record.plane;
   $$("[data-image]").forEach(item => {
     item.classList.toggle("active", item.dataset.image === mode);
     item.disabled = (item.dataset.image === "result" && !state.selectedRun)
+      || (item.dataset.image === "segments" && !state.selectedRun?.links.views?.segments)
       || (item.dataset.image === "gain" && !record.state.lighting)
       || (!!state.drawing && item.dataset.image !== mode);
   });
   const sizes = ["source", "gain"].includes(mode) ? [plane.source_width, plane.source_height] : [plane.width, plane.height];
-  $("#plane-label").textContent = sizes.join(" × ") + " px" + (mode === "working" || mode === "result" ? " · " + plane.unit : "");
+  $("#plane-label").textContent = sizes.join(" × ") + " px" + (["working", "result", "segments"].includes(mode) ? " · " + plane.unit : "");
   viewer.show({
     url, title, mode, plane, drawing: state.drawing, region: record.state.region,
     notes: showResult && resultRun.revision !== record.revision ? [] : state.notes,
     guide: state.tool === "rings" ? state.transect : null,
+    segments: (showSegments || mode === "segments") && resultRun?.result?.segments || [],
   });
 }
 
@@ -374,6 +383,7 @@ function selectRun(run) {
   state.drawing = null;
   state.selectedRun = run;
   state.image = "result";
+  hideSegmentReadout();
   renderHistory();
   renderResults();
   renderSetup();
@@ -392,12 +402,21 @@ function renderResults() {
   }
   $("#result-title").textContent = stored.title;
   downloads.append(link("Overlay ↓", stored.links.preview + "?download=1"), link("CSV ↓", stored.links.csv));
+  if (stored.kind === "cracks" && stored.links.views?.segments) {
+    downloads.append(link("Segment overlay ↓", stored.links.views.segments + "?download=1"));
+    if (stored.links.views.review) downloads.append(link("Review sheet ↓", stored.links.views.review + "?download=1"));
+  }
   const items = [metricCards(state.tools.get(stored.kind), stored.result)];
   if (stored.result.chart) items.push(plot(stored.result.chart));
   const messages = [...stored.result.notices];
   if (stored.revision !== state.current.revision) messages.unshift("This measurement belongs to revision " + stored.revision + ".");
   if (messages.length) items.push(notices(messages));
-  const rows = objectTable(stored);
+  const rows = objectTable(stored, segment => {
+    if (!stored.links.views?.segments) return;
+    state.image = "segments";
+    renderImage();
+    pickSegment(segment);
+  });
   if (rows) items.push(rows);
   output.replaceChildren(...items);
 }
@@ -441,6 +460,35 @@ function coordinate(point) {
   renderSetup();
   renderImage();
   if (["marker", "probe"].includes(drawing.kind)) finishDrawing().catch(error => notify(error.message, true));
+}
+
+function pickSegment(segment) {
+  viewer.select(segment);
+  const label = $("#segment-readout");
+  if (!segment) {
+    label.hidden = true;
+    label.textContent = "";
+    return;
+  }
+  const unit = state.selectedRun?.result?.unit || "px";
+  const measures = state.selectedRun.result;
+  const length = displayValue(segment.length, "linear", unit);
+  const share = segment.share === null || segment.share === undefined ? "—" : displayValue(segment.share, "%");
+  const fork = segment.from_kind === "fork" ? segment.from : segment.to_kind === "fork" ? segment.to : "";
+  label.textContent = [
+    segment.label + " · trace T" + segment.trace,
+    segment.from + " → " + segment.to,
+    length + " (" + share + " of the trace)",
+    fork ? "meets " + fork : "",
+    measures.metrics ? "whole trace " + displayValue(measures.metrics.total_length, "linear", unit) : "",
+  ].filter(Boolean).join("  ·  ");
+  label.hidden = false;
+}
+
+function hideSegmentReadout() {
+  viewer.select(null);
+  const label = $("#segment-readout");
+  if (label) label.hidden = true;
 }
 
 function cancelDrawing() {

@@ -151,7 +151,7 @@ export function metricCards(tool, result) {
   )));
 }
 
-export function objectTable(run) {
+export function objectTable(run, onSegment) {
   const measures = run.result;
   let rows = [];
   let headers = [];
@@ -162,11 +162,18 @@ export function objectTable(run) {
       displayValue(entry.gap_from_previous, "linear", measures.unit), entry.origin,
     ]);
   } else if (run.kind === "cracks") {
-    headers = ["Trace", "Length", "Width", "Junctions", "Edge"];
+    headers = ["Trace", "Length", "Width", "Junctions", "Edge", "Segments"];
     rows = (measures.objects || []).map(entry => [
-      entry.id, displayValue(entry.length, "linear", measures.unit),
-      displayValue(entry.median_width, "linear", measures.unit), entry.junctions, entry.touches_support_edge ? "Yes" : "No",
+      "T" + entry.id, displayValue(entry.length, "linear", measures.unit),
+      displayValue(entry.median_width, "linear", measures.unit), entry.junctions,
+      entry.touches_support_edge ? "Yes" : "No", entry.segments ?? "—",
     ]);
+    if (!rows.length) return null;
+    return el("details", {className: "manual", open: true},
+      el("summary", {text: "Show whole-trace readings · " + rows.length}),
+      table(headers, rows),
+      ...crackReview(measures, onSegment),
+    );
   } else if (run.kind === "pores") {
     headers = ["Pore", "Area", "Diameter", "Roundness"];
     rows = (measures.objects || []).map(entry => [
@@ -181,6 +188,62 @@ export function objectTable(run) {
   return el("details", {className: "manual"}, el("summary", {text: "Show readings · " + rows.length}),
     table(headers, rows),
   );
+}
+
+function crackReview(measures, onSegment) {
+  const segments = measures.segments || [];
+  const forks = measures.forks || [];
+  if (!segments.length && !forks.length) return [];
+  const unit = measures.unit;
+  const segmentRows = segments.map(entry => [
+    entry.label, "T" + entry.trace, entry.from, entry.to,
+    displayValue(entry.length, "linear", unit),
+    entry.share === null || entry.share === undefined ? "—" : displayValue(entry.share, "%"),
+    displayValue(entry.median_width, "linear", unit),
+    entry.boundary === "region" ? "Region edge" : entry.boundary === "source" ? "Source gap" : "",
+  ]);
+  const forkRows = forks.map(entry => [
+    entry.label, "T" + entry.trace, displayValue(entry.held_length, "linear", unit),
+    entry.segments.length ? entry.segments.join(", ") : "—",
+    entry.main_segments.length ? entry.main_segments.join(" – ") : "—",
+    Object.entries(entry.side_branches || {}).map(([label, angle]) => label + " (" + angle.toFixed(0) + "°)").join(", ") || "—",
+  ]);
+  const total = measures.metrics.segment_length + measures.metrics.fork_length;
+  const reconciliation = el("p",
+    {className: "crack-reconcile",
+     text: "Segments " + displayValue(measures.metrics.segment_length, "linear", unit)
+       + " + held at forks " + displayValue(measures.metrics.fork_length, "linear", unit)
+       + " = " + displayValue(total, "linear", unit)
+       + " (whole trace " + displayValue(measures.metrics.total_length, "linear", unit) + ")"},
+  );
+  const segmentTable = table(["Segment", "Trace", "From", "To", "Length", "Share", "Width", "Stops at"], segmentRows);
+  if (onSegment) {
+    segmentTable.querySelectorAll("tbody tr").forEach((row, index) => {
+      row.classList.add("pickable");
+      row.tabIndex = 0;
+      const choose = () => onSegment(segments[index]);
+      row.addEventListener("click", choose);
+      row.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          choose();
+        }
+      });
+    });
+  }
+  return [
+    reconciliation,
+    el("details", {className: "manual", open: true},
+      el("summary", {text: "Segment review · " + segmentRows.length}),
+      segmentTable,
+      el("p", {className: "subtle", text: "Select a row or click a segment on the Segments view to highlight it on the image."}),
+    ),
+    ...(forkRows.length ? [el("details", {className: "manual"},
+      el("summary", {text: "Fork clusters · " + forkRows.length}),
+      table(["Fork", "Trace", "Held length", "Adjoining segments", "Main line", "Side branches"], forkRows),
+      el("p", {className: "subtle", text: "Length held at a fork has no unambiguous branch, so it is counted once at the fork and never added into a segment. Main line shows the two adjoining segments that continue most nearly straight through the fork; other adjoining segments are side branches with their deviation from the main line."}),
+    )] : []),
+  ];
 }
 
 export function table(headers, rows) {

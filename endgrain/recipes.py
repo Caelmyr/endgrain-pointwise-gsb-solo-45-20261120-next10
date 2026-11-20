@@ -269,7 +269,7 @@ def replay(db: Database, prepared: Replay) -> list[dict]:
                 "notices": step.notices,
             }
             added = calculate(frame, TOOLS[step.kind], step.parameters, recipe=embedded)
-            total_bytes += len(added["preview"])
+            total_bytes += len(added["preview"]) + sum(len(payload) for payload in added["view_payloads"].values())
             if total_bytes > MAX_REPLAY_PREVIEW_BYTES:
                 raise WorkbenchError("The recipe produces too much image data in one run. Use fewer measurement steps.")
             created.append(added)

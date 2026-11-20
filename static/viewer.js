@@ -7,10 +7,12 @@ const hint = document.querySelector("#stage-hint");
 const context = canvas.getContext("2d");
 
 export class WorkbenchViewer {
-  constructor(onPoint) {
+  constructor(onPoint, onPick) {
     this.onPoint = onPoint;
+    this.onPick = onPick;
     this.info = {};
     this.zoom = 1;
+    this.picked = null;
     picture.addEventListener("load", () => this.resize());
     picture.addEventListener("error", () => {
       hint.hidden = false;
@@ -19,12 +21,13 @@ export class WorkbenchViewer {
     new ResizeObserver(() => this.resize()).observe(viewport);
     canvas.addEventListener("click", event => {
       if (this.info.drawing) this.onPoint(this.point(event));
+      else if (this.info.mode === "segments" && this.onPick) this.onPick(this.pick(this.point(event)));
     });
     canvas.addEventListener("pointermove", event => {
       const [x, y] = this.point(event);
       const plane = this.info.plane;
       const unit = plane?.unit;
-      if (unit === "mm" && ["working", "result"].includes(this.info.mode)) {
+      if (unit === "mm" && ["working", "result", "segments"].includes(this.info.mode)) {
         const sx = (x + 0.5) * plane.mm_per_x;
         const sy = (y + 0.5) * plane.mm_per_y;
         pointerLabel.textContent = sx.toFixed(1) + " / " + sy.toFixed(1) + " mm";
@@ -44,6 +47,7 @@ export class WorkbenchViewer {
 
   resetZoom() {
     this.zoom = 1;
+    this.picked = null;
     viewport.scrollTo(0, 0);
   }
 
@@ -51,9 +55,10 @@ export class WorkbenchViewer {
     this.info = info;
     const requested = info.url;
     if (picture.getAttribute("src") !== requested) picture.setAttribute("src", requested);
+    if (info.mode !== "segments") this.picked = null;
     hint.hidden = !info.drawing;
     hint.textContent = info.drawing?.hint ?? "";
-    canvas.style.cursor = info.drawing ? "crosshair" : "default";
+    canvas.style.cursor = info.drawing ? "crosshair" : info.mode === "segments" ? "pointer" : "default";
     document.querySelector("#image-label").textContent = info.title;
     this.resize();
   }
@@ -76,6 +81,14 @@ export class WorkbenchViewer {
     this.paint(1 / ratio);
   }
 
+  select(segment) {
+    this.picked = segment;
+    const w = picture.naturalWidth;
+    if (!w) return;
+    const shown = shell.clientWidth / w;
+    this.paint(shown ? 1 / shown : 1);
+  }
+
   point(evt) {
     const rect = canvas.getBoundingClientRect();
     const w = picture.naturalWidth;
@@ -84,6 +97,36 @@ export class WorkbenchViewer {
     const x = Math.min(w - 1, Math.max(0, (evt.clientX - rect.left) * w / rect.width - 0.5));
     const y = Math.min(h - 1, Math.max(0, (evt.clientY - rect.top) * h / rect.height - 0.5));
     return [Number(x.toFixed(2)), Number(y.toFixed(2))];
+  }
+
+  pick([x, y]) {
+    const segments = this.info.segments || [];
+    let best = null;
+    let bestDistance = Infinity;
+    const reach = point => {
+      const path = segment.path?.length ? segment.path : [segment.start, segment.end];
+      for (let index = 1; index < path.length; index++) {
+        const [ax, ay] = path[index - 1];
+        const [bx, by] = path[index];
+        const dx = bx - ax;
+        const dy = by - ay;
+        const span = dx * dx + dy * dy;
+        const t = span ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / span)) : 0;
+        distance = Math.min(distance, Math.hypot(ax + t * dx - x, ay + t * dy - y));
+      }
+    };
+    let distance;
+    segments.forEach(segment => {
+      distance = Infinity;
+      reach(segment);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = segment;
+      }
+    });
+    const tolerance = Math.max(4, (this.info.plane?.width || 600) / 120);
+    if (!best || bestDistance > tolerance) return null;
+    return best;
   }
 
   path(points, tone, width, {closed = false, dashed = false, dotted = false} = {}) {
@@ -118,7 +161,7 @@ export class WorkbenchViewer {
   }
 
   paint(size) {
-    const {drawing, mode, plane, region, notes, guide} = this.info;
+    const {drawing, mode, plane, region, notes, guide, segments} = this.info;
     context.clearRect(0, 0, picture.naturalWidth, picture.naturalHeight);
     if (mode === "source" && !drawing) {
       const cal = plane?.calibration;
@@ -128,6 +171,14 @@ export class WorkbenchViewer {
     if (mode === "working") {
       if (!drawing || drawing.kind !== "region") this.path(region, "#dfd3a7", size * 1.15, {dashed: true, closed: true});
       if (!drawing) this.path(guide, "#e2ad6e", size * 1.6, {dotted: true});
+    }
+    if (mode === "segments" && this.picked) {
+      const path = this.picked.path?.length ? this.picked.path : [this.picked.start, this.picked.end];
+      this.path(path, "#ffe9b0", size * 3, {});
+      this.path([this.picked.start], "#ffe9b0", size * 2.4, {dotted: true});
+      this.path([this.picked.end], "#ffe9b0", size * 2.4, {dotted: true});
+      const spot = path[Math.floor(path.length / 2)];
+      this.label(spot, this.picked.label, size);
     }
     if (["working", "result"].includes(mode) && !drawing) {
       (notes || []).forEach(note => {

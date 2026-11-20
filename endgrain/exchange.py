@@ -280,6 +280,8 @@ def _bundle_files(
         common = f"measurements/{index:02d}-{run['kind']}"
         add(common + ".png", db.run_attachment(inspection_id, run["id"], "preview"))
         add(common + ".csv", export_run_csv(db, inspection_id, run["id"]))
+        for view in run.get("views") or []:
+            add(common + "-" + view + ".png", db.run_view(inspection_id, run["id"], view))
     return seen
 
 
@@ -287,7 +289,7 @@ def asset_inventory(zipped: ZipFile) -> dict[str, ZipInfo]:
     records = {}
     declared_size = 0
     names = zipped.infolist()
-    if len(names) > 36:
+    if len(names) > 80:
         raise WorkbenchError("The evidence archive has too many files.", "file")
     for member in names:
         path = PurePosixPath(member.filename)
@@ -349,6 +351,13 @@ def standard_report_entries(inspection: dict, runs: list) -> set[str]:
         seen_ids.add(run_id)
         root = f"measurements/{count:02d}-{tool}"
         body.update({root + ".png", root + ".csv"})
+        views = case.get("views") or []
+        if not isinstance(views, list) or len(views) > 8:
+            raise WorkbenchError("A reported measurement lists an invalid overlay set.", "file")
+        for view in views:
+            if view not in {"segments", "review"}:
+                raise WorkbenchError("A reported measurement names an unknown overlay.", "file")
+            body.add(root + "-" + view + ".png")
     if len(references) != 1:
         raise WorkbenchError("The report mixes measurement reference images.", "file")
     return body
