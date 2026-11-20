@@ -83,11 +83,21 @@ CREATE TABLE IF NOT EXISTS recipes (
     recipe TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pairings (
+    id TEXT PRIMARY KEY,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    reviewer TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    review TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS inspection_order ON inspections(updated_at DESC, id);
 CREATE INDEX IF NOT EXISTS run_order ON runs(inspection_id, revision DESC, created_at DESC, id);
 CREATE INDEX IF NOT EXISTS note_order ON notes(inspection_id, revision, created_at DESC);
 CREATE INDEX IF NOT EXISTS report_order ON reports(inspection_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS event_order ON events(inspection_id, pk DESC);
+CREATE INDEX IF NOT EXISTS pairing_order ON pairings(inspection_id, created_at DESC, id);
 """
 
 INSPECTION_SELECT = """

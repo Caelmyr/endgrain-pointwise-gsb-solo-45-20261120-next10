@@ -1,5 +1,6 @@
 import {WorkbenchViewer} from "./viewer.js";
 import {enterLots, enterRecipes, showProbe, wireExtras} from "./extras.js";
+import {enterTwoEnds, wireTwoEnds} from "./twoends.js";
 import {
   button, createToolInput, displayValue, el, link, metricCards, notices,
   objectTable, plot, shortTime, table,
@@ -169,6 +170,7 @@ function extrasContext() {
 
 function enterPanel() {
   if (!state.current) return;
+  if (state.view === "twoends") enterTwoEnds(extrasContext()).catch(error => notify(error.message, true));
   if (state.view === "reports") renderReports().catch(error => notify(error.message, true));
   if (state.view === "recipes") enterRecipes(extrasContext()).catch(error => notify(error.message, true));
   if (state.view === "lots") enterLots(extrasContext()).catch(error => notify(error.message, true));
@@ -182,7 +184,7 @@ function renderAll() {
     item.disabled = !ready && item.dataset.view !== "inspect";
   });
   $("#empty").hidden = ready;
-  ["inspect", "compare", "reports", "recipes", "lots"].forEach(key => { $("#" + key + "-view").hidden = !ready || active !== key; });
+  ["inspect", "compare", "twoends", "reports", "recipes", "lots"].forEach(key => { $("#" + key + "-view").hidden = !ready || active !== key; });
   $("#controls").hidden = !ready || active !== "inspect";
   renderLibrary();
   if (!ready) return;
@@ -795,6 +797,7 @@ function wire() {
 async function boot() {
   wire();
   wireExtras(extrasContext());
+  wireTwoEnds(extrasContext());
   const catalogue = await api("/api/tools");
   state.tools = new Map(catalogue.tools.map(tool => [tool.id, tool]));
   await reloadLibrary();

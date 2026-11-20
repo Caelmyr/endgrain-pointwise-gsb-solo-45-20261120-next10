@@ -7,7 +7,10 @@ from typing import Any
 from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge, UnsupportedMediaType
 
-from . import calibration_preview, comparison, exchange, lots, measurements, plates, probe, recipes, reports, workspaces
+from . import (
+    calibration_preview, comparison, exchange, lots, measurements, pairing, plates,
+    probe, recipes, reports, workspaces,
+)
 from .captures import (
     SURFACES, image_etag, ingest_inspection, ingest_reference, select_references,
 )
@@ -265,6 +268,40 @@ def create_app(data_folder: str | None = None) -> Flask:
     @app.get("/api/inspections/<inspection_id>/events")
     def events(inspection_id):
         return jsonify({"items": db.events(inspection_id)})
+
+    @app.get("/api/inspections/<inspection_id>/pairings")
+    def pairings(inspection_id):
+        db.inspection(inspection_id)
+        return jsonify({"items": pairing.listing(db, inspection_id)})
+
+    @app.post("/api/inspections/<inspection_id>/pairings")
+    def save_pairing(inspection_id):
+        return jsonify(pairing.save(db, inspection_id, read_document())), 201
+
+    @app.get("/api/inspections/<inspection_id>/pairings/<review_id>")
+    def one_pairing(inspection_id, review_id):
+        return jsonify(pairing.describe(db, inspection_id, pairing.read(db, inspection_id, review_id)))
+
+    @app.get("/api/inspections/<inspection_id>/pairings/<review_id>/sheet.png")
+    def pairing_sheet(inspection_id, review_id):
+        record = pairing.read(db, inspection_id, review_id)
+        left, right = pairing.review_plates(db, record)
+        name = f"endgrain-two-end-{review_id[:10]}.png" if request.args.get("download") == "1" else None
+        return binary(pairing.sheet(left, right, record), "image/png", name=name, etag=review_id, immutable=True)
+
+    @app.get("/api/inspections/<inspection_id>/pairings/<review_id>/review.csv")
+    def pairing_csv(inspection_id, review_id):
+        record = pairing.read(db, inspection_id, review_id)
+        return binary(
+            pairing.export_csv(db, inspection_id, record),
+            "text/csv",
+            name=f"endgrain-two-end-{review_id[:10]}.csv",
+        )
+
+    @app.get("/api/inspections/<inspection_id>/pairings/<review_id>/print")
+    def pairing_print(inspection_id, review_id):
+        record = pairing.read(db, inspection_id, review_id)
+        return Response(pairing.render_print(db, inspection_id, record), mimetype="text/html")
 
     @app.get("/api/inspections/<inspection_id>/reports")
     def inspections_reports(inspection_id):
