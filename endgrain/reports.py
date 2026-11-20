@@ -133,7 +133,35 @@ def metadata_rows(inspection: dict) -> str:
     return "".join("<dt>" + escape(name) + "</dt><dd>" + escape(value or "—") + "</dd>" for name, value in details.items())
 
 
-def measurement_section(record: dict, image_url: str, csv_url: str) -> str:
+def group_section(record: dict, image_urls: list[str]) -> str:
+    groups = record["result"].get("groups") or []
+    if not groups:
+        return ""
+    measurable = record["result"].get("measurable_pixels")
+    rows = []
+    for group, image_url in zip(groups, image_urls, strict=False):
+        share = format_number((group.get("share") or 0) * 100, 1) + "%"
+        pixels = format_number(group.get("pixels"))
+        rows.append(
+            "<tr><th>" + escape(group["label"]) + "</th>"
+            "<td>" + escape(format_number(group.get("angle"), 1) + "°") + "</td>"
+            "<td>" + escape(share) + "</td><td>" + escape(pixels) + "</td>"
+            '<td><a href="' + escape(image_url, quote=True) + '">Direction overlay</a></td></tr>'
+        )
+    return (
+        '<h3>Supported directions</h3>'
+        "<p>Each group is a local texture direction with clear evidence. Shares use the "
+        + escape(format_number(measurable))
+        + " measurable pixels; angles are undirected, so 0° and 180° are the same. "
+        "Overlapping or low-contrast pixels stay ambiguous and are not counted toward a group.</p>"
+        '<table><thead><tr><th>Group</th><th>Angle</th><th>Share of measurable area</th>'
+        "<th>Evidence pixels</th><th>Overlay</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    )
+
+
+def measurement_section(
+    record: dict, image_url: str, csv_url: str, group_urls: list[str] | None = None,
+) -> str:
     kind = TOOLS[record["kind"]]
     outcome = record["result"]
     metric_values = outcome["metrics"]
@@ -151,7 +179,8 @@ def measurement_section(record: dict, image_url: str, csv_url: str) -> str:
         '<h2>' + escape(kind.title) + '</h2>'
         '<p>' + escape(kind.description) + '</p>'
         '<figure><img src="' + escape(image_url, quote=True) + '" alt="' + escape(kind.title, quote=True) + ' overlay"></figure>'
-        '<table>' + "".join(lines) + '</table>'
+        + group_section(record, group_urls or [])
+        + '<table>' + "".join(lines) + '</table>'
         '<ul>' + notices + '</ul>'
         '<p><a href="' + escape(csv_url, quote=True) + '">Download measurement table</a></p>'
         '<details><summary>Analysis settings</summary><ul>' + "".join(params) + '</ul></details>'
@@ -216,7 +245,12 @@ def render_print(report: dict, *, offline: bool = False) -> str:
         endpoint = root + "/runs/" + run["id"]
         image_url = name + ".png" if offline else endpoint + "/preview.png"
         csv_url = name + ".csv" if offline else endpoint + "/table.csv"
-        sections.append(measurement_section(run, image_url, csv_url))
+        group_urls = [
+            f"{name}-group-{group['label']}.png" if offline
+            else endpoint + "/groups/" + str(group["index"]) + ".png"
+            for group in run["result"].get("groups") or []
+        ]
+        sections.append(measurement_section(run, image_url, csv_url, group_urls))
     scope_url = "scope.png" if offline else root + "/reports/" + report["id"] + "/scope.png"
     scope = '<figure><img src="' + escape(scope_url, quote=True) + '" alt="Source and measuring support with calibration and markers"></figure>'
     disposition = DISPOSITIONS[review["disposition"]]

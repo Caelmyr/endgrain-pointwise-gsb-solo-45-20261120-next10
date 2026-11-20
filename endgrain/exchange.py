@@ -280,6 +280,10 @@ def _bundle_files(
         common = f"measurements/{index:02d}-{run['kind']}"
         add(common + ".png", db.run_attachment(inspection_id, run["id"], "preview"))
         add(common + ".csv", export_run_csv(db, inspection_id, run["id"]))
+        for group in run["result"].get("groups") or []:
+            label = group["label"] if group["label"].isalnum() else str(group["index"])
+            asset = db.run_attachment(inspection_id, run["id"], "asset:group-" + str(group["index"]) + ".png")
+            add(f"{common}-group-{label}.png", asset)
     return seen
 
 
@@ -349,6 +353,10 @@ def standard_report_entries(inspection: dict, runs: list) -> set[str]:
         seen_ids.add(run_id)
         root = f"measurements/{count:02d}-{tool}"
         body.update({root + ".png", root + ".csv"})
+        groups = case.get("result", {}).get("groups") or []
+        for group in groups:
+            label = group["label"] if str(group["label"]).isalnum() else str(group["index"])
+            body.add(f"{root}-group-{label}.png")
     if len(references) != 1:
         raise WorkbenchError("The report mixes measurement reference images.", "file")
     return body

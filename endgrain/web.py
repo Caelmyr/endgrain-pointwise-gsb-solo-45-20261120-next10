@@ -215,6 +215,13 @@ def create_app(data_folder: str | None = None) -> Flask:
         table = reports.export_run_csv(db, inspection_id, run_id)
         return binary(table, "text/csv", name=f"endgrain-reading-{run_id[:10]}.csv")
 
+    @app.get("/api/inspections/<inspection_id>/runs/<run_id>/groups/<int:group>.png")
+    def group_overlay(inspection_id, run_id, group):
+        integer(group, "direction group", 0, 1)
+        result = db.run_attachment(inspection_id, run_id, "asset:group-" + str(group) + ".png")
+        name = f"endgrain-direction-{run_id[:10]}-{group}.png" if request.args.get("download") == "1" else None
+        return binary(result, "image/png", name=name, etag=f"{run_id}-{group}", immutable=True)
+
     def compare_query(inspection_id):
         return comparison.pair(db, inspection_id, request.args.get("left"), request.args.get("right"))
 

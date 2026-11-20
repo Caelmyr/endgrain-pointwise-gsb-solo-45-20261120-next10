@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS runs (
     table_data TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS run_assets (
+    run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    payload BLOB NOT NULL,
+    PRIMARY KEY (run_id, name)
+);
 CREATE TABLE IF NOT EXISTS notes (
     id TEXT PRIMARY KEY,
     inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
@@ -376,6 +382,11 @@ class Database:
                 timestamp(),
             ),
         )
+        for name, payload in values.get("assets", {}).items():
+            conn.execute(
+                "INSERT INTO run_assets (run_id,name,payload) VALUES (?,?,?)",
+                (run_id, name, payload),
+            )
         self.event(conn, inspection_id, revision, "analysis_saved", {"kind": values["kind"], "run_id": run_id})
         return self.run_on(conn, inspection_id, run_id)
 
@@ -404,6 +415,17 @@ class Database:
 
     def run_attachment(self, inspection_id: str, run_id: str, category: str) -> bytes | dict:
         columns = {"preview": "preview", "table": "table_data"}
+        if category.startswith("asset:"):
+            name = category.split(":", 1)[1]
+            with self.connection() as conn:
+                row = conn.execute(
+                    """SELECT a.payload FROM run_assets a JOIN runs r ON r.id = a.run_id
+                       WHERE r.inspection_id = ? AND r.id = ? AND a.name = ?""",
+                    (inspection_id, run_id, name),
+                ).fetchone()
+            if row is None:
+                raise Missing("Measurement overlay")
+            return row[0]
         with self.connection() as conn:
             row = conn.execute(
                 f"SELECT {columns[category]} FROM runs WHERE inspection_id = ? AND id = ?",

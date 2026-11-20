@@ -137,6 +137,10 @@ TOOLS = {
             control("minimum_energy", "Minimum gradient energy", 0.012, step=0.001),
             control("nominal_axis", "Comparison axis (°)", 0, step=1),
             control("tolerance", "Axis tolerance (°)", 20, step=1),
+            control("group_separation", "Direction separation (°)", 16, step=1),
+            control("assignment_band", "Assignment band (°)", 24, step=1),
+            control("ambiguity_margin", "Ambiguity margin (°)", 8, step=1),
+            control("minimum_group_share", "Smallest group share", 0.004, step=0.001),
         ],
         {
             "principal_angle": ("Principal angle", "°"),
@@ -144,6 +148,9 @@ TOOLS = {
             "classified_fraction": ("Reliable area", "%"),
             "within_axis_tolerance": ("Within tolerance", "%"),
             "median_coherence": ("Median coherence", "%"),
+            "direction_groups": ("Supported directions", "count"),
+            "grouped_fraction": ("Attributed to a direction", "%"),
+            "unresolved_fraction": ("Ambiguous or unassigned", "%"),
         },
         grain.GRAIN_COLUMNS, grain.normalize_params, grain.measure,
     ),
@@ -249,11 +256,21 @@ def describe_run(run: dict) -> dict:
     item["title"] = tool.title if tool else run["kind"]
     url = "/api/inspections/" + run["inspection_id"] + "/runs/" + run["id"]
     item["links"] = {"preview": url + "/preview.png", "csv": url + "/table.csv", "data": url}
+    groups = run["result"].get("groups") or []
+    if groups:
+        item["links"]["groups"] = [
+            {"index": group["index"], "label": group["label"], "color": group["color"],
+             "image": url + "/groups/" + str(group["index"]) + ".png"}
+            for group in groups
+        ]
     return item
 
 
 def calculate(frame, tool: Tool, params: dict, *, recipe: dict | None = None) -> dict:
-    result, visual, rows = tool.measure(frame.raster, params)
+    outcome = tool.measure(frame.raster, params)
+    result, visual, rows = outcome[:3]
+    assets = outcome[3] if len(outcome) > 3 else {}
+    table = rows if isinstance(rows, dict) else {"columns": tool.columns, "rows": rows}
     snapshot = {
         "source_digest": frame.inspection["source_digest"],
         "state": frame.inspection["state"],
@@ -268,7 +285,8 @@ def calculate(frame, tool: Tool, params: dict, *, recipe: dict | None = None) ->
         "snapshot": snapshot,
         "result": json_ready(result),
         "preview": encode_png(visual),
-        "table_data": {"columns": tool.columns, "rows": json_ready(rows)},
+        "assets": {name: blob for name, blob in assets.items()},
+        "table_data": {**table, "rows": json_ready(table["rows"])},
     }
 
 

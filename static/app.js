@@ -12,6 +12,7 @@ const state = {
   runs: [], notes: [], selectedRun: null, tool: "rings", settings: {},
   view: "inspect", image: "working", drawing: null, marker: null,
   transect: null, swatches: null, footprintSeed: null, edgeCorners: null,
+  groupView: null,
   selectionEpoch: 0, queryEpoch: 0,
 };
 
@@ -143,6 +144,7 @@ async function openInspection(inspectionId, activate = false) {
   state.runs = runData.items;
   state.notes = notes.items;
   state.selectedRun = state.runs.find(item => item.revision === record.revision) || null;
+  state.groupView = null;
   state.image = "working";
   if (activate) state.view = "inspect";
   $("#report-title").value = record.title + " inspection";
@@ -317,6 +319,7 @@ function renderImage() {
   if (!record) return;
   const showResult = state.image === "result" && state.selectedRun;
   const showGain = state.image === "gain" && record.state.lighting;
+  const group = showResult ? state.selectedRun.links.groups?.find(item => item.index === state.groupView) : null;
   const resultRun = state.selectedRun;
   let mode = state.image;
   let url = record.links.working + "?r=" + record.revision;
@@ -332,6 +335,10 @@ function renderImage() {
   if (showResult) {
     url = resultRun.links.preview;
     title = resultRun.title + " overlay";
+  }
+  if (group) {
+    url = group.image;
+    title = resultRun.title + " · direction " + group.label + " evidence";
   }
   if (showGain) {
     url = currentApi("/lighting.png?view=gain&r=" + record.revision);
@@ -374,6 +381,7 @@ function selectRun(run) {
   state.drawing = null;
   state.selectedRun = run;
   state.image = "result";
+  state.groupView = null;
   renderHistory();
   renderResults();
   renderSetup();
@@ -393,6 +401,8 @@ function renderResults() {
   $("#result-title").textContent = stored.title;
   downloads.append(link("Overlay ↓", stored.links.preview + "?download=1"), link("CSV ↓", stored.links.csv));
   const items = [metricCards(state.tools.get(stored.kind), stored.result)];
+  const groups = stored.result.groups || [];
+  if (groups.length) items.push(directionGroups(stored, groups));
   if (stored.result.chart) items.push(plot(stored.result.chart));
   const messages = [...stored.result.notices];
   if (stored.revision !== state.current.revision) messages.unshift("This measurement belongs to revision " + stored.revision + ".");
@@ -400,6 +410,48 @@ function renderResults() {
   const rows = objectTable(stored);
   if (rows) items.push(rows);
   output.replaceChildren(...items);
+}
+
+function directionGroups(stored, groups) {
+  const result = stored.result;
+  const links = Object.fromEntries((stored.links.groups || []).map(item => [item.index, item.image]));
+  const selected = state.groupView;
+  const buttons = groups.map(group => {
+    const active = group.index === selected;
+    const control = button(
+      (active ? "Hide " : "Show ") + [
+        group.label,
+        displayValue(group.angle, "°"),
+        displayValue(group.share, "%") + " of measurable",
+      ].join(" · "),
+      () => {
+        state.groupView = active ? null : group.index;
+        renderResults();
+        renderImage();
+      },
+      "button " + (active ? "strong" : "outline"),
+    );
+    control.classList.add("group-button");
+    control.style.setProperty("--group", group.color);
+    control.setAttribute("aria-pressed", String(active));
+    return control;
+  });
+  const share = displayValue(result.metrics.grouped_fraction, "%");
+  const unresolved = displayValue(result.metrics.unresolved_fraction, "%");
+  const note = selected === null
+    ? "Choose a direction to see where it is supported on the original overlay. "
+    : "Tinted pixels support this direction; gray pixels are ambiguous or unattributed. ";
+  return el("div", {className: "direction-groups"},
+    el("div", {className: "direction-head"},
+      el("strong", {text: "Direction evidence"}),
+      el("span", {text: share + " of measurable area attributed · " + unresolved + " ambiguous or unassigned"}),
+    ),
+    el("div", {className: "direction-buttons"}, ...buttons),
+    el("p", {className: "subtle direction-note", text: note + "Angles are undirected, so 0° and 180° are one direction."}),
+    selected !== null && links[selected] ? el("a", {
+      className: "text-link", text: "Download this direction overlay ↓", href: links[selected] + "?download=1",
+    }) : "",
+  );
 }
 
 function renderNotes() {
@@ -646,7 +698,9 @@ function wire() {
   $$("[data-view]").forEach(item => item.addEventListener("click", () => setView(item.dataset.view)));
   $$("[data-image]").forEach(item => item.addEventListener("click", () => {
     state.image = item.dataset.image;
+    state.groupView = null;
     renderImage();
+    renderResults();
   }));
   $("#demo-load").addEventListener("click", startDemo);
   $("#empty-open").addEventListener("click", startDemo);

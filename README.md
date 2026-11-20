@@ -17,7 +17,7 @@ For a Python 3.11 environment, install `requirements.txt` and run `./start.sh`. 
 1. Import a single face photograph or open the synthetic samples. The synthetic white oak has a branching check and growth-ring bands. The synthetic walnut includes a brighter area and two tones. The synthetic ash has periodic saw marks.
 2. Calibrate with a measured ruler or rectify four corners of a known rectangle. Click the source points in order. The Grid view displays the selected plane and the ruler length or grid spacing. Draw a simple polygon using **Region** to limit analysis.
 3. Optionally attach a flat-field reference from the same setup. The reference must have the same oriented dimensions. Use the Lighting view to check gain and unsupported reference locations.
-4. Run a measurement. Results include an overlay, summary, and a downloadable CSV. Use the Pixel probe on the working image for a magnified patch, source mapping and luminance profiles. Add review markers by clicking locations in the selected measuring region.
+4. Run a measurement. Results include an overlay, summary, and a downloadable CSV. Grain orientation additionally reports up to two supported directions with an angle and a share of the measurable area; select a direction to see the pixels that clearly support it on the original overlay, or download that view. Use the Pixel probe on the working image for a magnified patch, source mapping and luminance profiles. Add review markers by clicking locations in the selected measuring region.
 5. Compare two saved measurements of the same kind. A color difference overlay is available when they share a source, plane, region and lighting settings. The Recipes tab can replay selected tool settings on a second inspection. The Lots tab screens saved readings and exports a slide of face overlays and a CSV.
 6. Include current measurements in a report and download its evidence ZIP. It contains source material, the measuring setup illustration, overlays, tables, the manifest and checksums. The separate inspection exchange ZIP carries the original capture, settings, attached lighting reference and current markers into a separate record on restore.
 
@@ -27,7 +27,7 @@ For a Python 3.11 environment, install `requirements.txt` and run `./start.sh`. 
 - **Annual ring transect** samples a narrow band and suggests contrast boundaries. Inspect or replace the candidates before interpreting the distances as growth increments.
 - **Crack traces** estimates skeleton lengths and dark-region widths. It identifies branch and edge-touching regions as review candidates.
 - **Vessel pores** estimates component diameter, area and density from compact dark regions.
-- **Grain orientation** maps axial texture and represents ambiguous local orientation separately from reliable regions.
+- **Grain orientation** maps axial texture and represents ambiguous local orientation separately from reliable regions. It also resolves one or two supported directions, and each can be shown as an evidence overlay on the original image.
 - **Saw chatter** measures texture power within an axis and wavelength band in overlapping windows.
 - **Wood footprint** isolates a warm, bright connected end-face silhouette against its backing.
 - **Edge recession** shows supported loss or unknown areas along a manually specified nominal stock outline.

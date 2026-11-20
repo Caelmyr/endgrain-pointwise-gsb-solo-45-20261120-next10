@@ -146,6 +146,14 @@ select { width:100%; }
 .metric strong { display:block; line-height:1.15; margin-top:3px; font-size:16px; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
 .analysis-notices { margin:8px 0 0; padding-left:16px; color:var(--muted); font-size:11px; }
 .analysis-notices li+li { margin-top:5px; }
+.direction-groups { margin:2px 0 9px; padding:9px; background:#f3f2e8; border:1px solid #e0e1d2; border-radius:5px; }
+.direction-head { display:flex; flex-wrap:wrap; gap:2px 9px; align-items:baseline; margin-bottom:7px; }
+.direction-head strong { font-size:12px; }
+.direction-head span { font-size:11px; color:var(--muted); }
+.direction-buttons { display:flex; flex-wrap:wrap; gap:5px; }
+.group-button { border-left:4px solid var(--group); font-variant-numeric:tabular-nums; }
+.direction-note { margin:6px 0 0; font-size:11px; }
+.direction-groups .text-link { display:inline-block; margin-top:6px; font-size:11px; color:var(--green); }
 .result-empty,.notes-empty,.compare-empty { color:var(--muted); font-size:12px; padding:7px 1px; }
 .plot { display:block; width:100%; height:132px; background:#f0efe6; border:1px solid #e2e3d5; border-radius:5px; margin:9px 0; }
 .notes-list { display:grid; gap:7px; }
