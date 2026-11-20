@@ -118,7 +118,7 @@ export class WorkbenchViewer {
   }
 
   paint(size) {
-    const {drawing, mode, plane, region, notes, guide} = this.info;
+    const {drawing, mode, plane, region, notes, guide, faces, stations, sampleFaces} = this.info;
     context.clearRect(0, 0, picture.naturalWidth, picture.naturalHeight);
     if (mode === "source" && !drawing) {
       const cal = plane?.calibration;
@@ -133,6 +133,27 @@ export class WorkbenchViewer {
       (notes || []).forEach(note => {
         this.path([note.point], "#e8b170", size * 1.5, {dotted: true});
         this.label(note.point, note.label, size);
+      });
+    }
+    if (["working", "result"].includes(mode) && !drawing) {
+      const inks = ["#eecd8b", "#8fcad1"];
+      (faces || []).forEach((face, index) => {
+        this.path(face.polygon, inks[index % inks.length], size * 1.4, {closed: true, dashed: true});
+      });
+      (stations || []).forEach(station => {
+        const [x0, y0, x1, y1] = station.frame;
+        const tone = station.status === "void" ? "#d87661" : station.status === "shot" ? "#68b7ca" : "#7ebe89";
+        this.path([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], tone, size * 1.6, {
+          closed: true, dashed: station.status === "void",
+        });
+        this.label([x0, y0], station.id, size);
+      });
+    }
+    if (["working", "source"].includes(mode) && !drawing) {
+      const drafts = Object.entries(sampleFaces || {}).filter(([, points]) => points?.length >= 3);
+      drafts.forEach(([id, points], index) => {
+        this.path(points, index ? "#8fcad1" : "#eecd8b", size * 1.5, {closed: true, dashed: true});
+        this.label(points[0], "Face " + id, size);
       });
     }
     if (drawing) {

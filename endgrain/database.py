@@ -75,6 +75,13 @@ CREATE TABLE IF NOT EXISTS events (
     detail TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS station_plans (
+    inspection_id TEXT PRIMARY KEY REFERENCES inspections(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS recipes (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -453,6 +460,33 @@ class Database:
             if change.rowcount < 1:
                 raise Missing("Marker")
             self.event(conn, inspection_id, revision, "marker_removed", {"note_id": note_id})
+
+    def station_plan(self, inspection_id: str) -> dict | None:
+        with self.connection() as conn:
+            self.inspection_on(conn, inspection_id)
+            row = conn.execute(
+                "SELECT payload FROM station_plans WHERE inspection_id = ?", (inspection_id,)
+            ).fetchone()
+        return json.loads(row["payload"]) if row else None
+
+    def save_station_plan(
+        self, inspection_id: str, revision: int, payload: dict,
+        action: str = "sampling_plan_saved", detail: dict | None = None,
+    ) -> dict:
+        canonical = encode(payload)
+        now = payload["updated_at"]
+        with self.transaction() as conn:
+            current = self.inspection_on(conn, inspection_id)
+            self.validate_revision(current, revision)
+            conn.execute(
+                """INSERT INTO station_plans (inspection_id,revision,payload,created_at,updated_at)
+                   VALUES (?,?,?,?,?)
+                   ON CONFLICT(inspection_id) DO UPDATE SET
+                   revision = excluded.revision, payload = excluded.payload, updated_at = excluded.updated_at""",
+                (inspection_id, revision, canonical, payload["created_at"], now),
+            )
+            self.event(conn, inspection_id, current["revision"], action, detail or {})
+        return payload
 
     def reports(self, inspection_id: str) -> list[dict]:
         with self.connection() as conn:

@@ -256,6 +256,31 @@
         <div id="setup-state"></div><button id="probe-start" type="button" class="button outline">Pixel probe</button>
         <div id="drawing-actions" class="drawing-actions" hidden></div>
       </section>
+      <section class="tool-section" id="sampling-section">
+        <div class="rail-headline"><h3>Micrograph stations</h3><span id="sampling-chip"></span></div>
+        <div class="sampling-faces">
+          <button type="button" class="button outline" id="sample-face-A">Draw face A</button>
+          <button type="button" class="button outline" id="sample-face-B">Draw face B</button>
+          <button type="button" class="text-link" id="sample-clear">Clear</button>
+        </div>
+        <div id="sampling-faces" class="sampling-faces-state"></div>
+        <form id="sampling-form" class="stack-form">
+          <div class="form-grid">
+            <label>Field width (mm)<input name="frame_width_mm" type="number" min="0.01" max="500" step="any" value="12" required></label>
+            <label>Field height (mm)<input name="frame_height_mm" type="number" min="0.01" max="500" step="any" value="9" required></label>
+            <label>Maximum frames<input name="budget" type="number" min="1" max="96" step="1" value="12" required></label>
+            <label>Minimum gap (mm)<input name="spacing_mm" type="number" min="0" max="100" step="any" value="1.5" required></label>
+          </div>
+          <div class="form-grid" id="sampling-minimums"></div>
+          <div class="panel-actions">
+            <button type="submit" class="button strong" id="sampling-plan-button">Place stations</button>
+            <button type="button" class="button ghost" id="sampling-reset">Reset plan</button>
+          </div>
+        </form>
+        <div id="sampling-state" class="sampling-state"></div>
+        <button type="button" class="button outline wide" id="sampling-plan-open">Open station plan</button>
+        <div class="panel-actions" id="sampling-links"></div>
+      </section>
       <section class="tool-section">
         <label for="tool-select">Measurement tool</label>
         <select id="tool-select"></select>
@@ -368,6 +393,22 @@
       <div class="dialog-title"><h2>Pixel probe</h2><button class="icon-button" type="button" data-close aria-label="Close">×</button></div>
       <div id="probe-body"></div>
     </div>
+  </dialog>
+  <dialog id="sampling-dialog" class="wide-dialog">
+    <div class="dialog-form">
+      <div class="dialog-title"><h2>Station plan</h2><button class="icon-button" type="button" data-close aria-label="Close">×</button></div>
+      <div id="sampling-plan-body"></div>
+    </div>
+  </dialog>
+  <dialog id="void-dialog">
+    <form id="void-form" class="dialog-form">
+      <div class="dialog-title"><h2>Void station</h2><button class="icon-button" type="button" data-close aria-label="Close">×</button></div>
+      <p class="subtle" id="void-station"></p>
+      <label>Why can this frame not be captured?<textarea name="reason" rows="3" maxlength="240" required></textarea></label>
+      <p class="subtle">The position stays in the plan as void and a replacement candidate is placed on the same face. Captured frames do not move.</p>
+      <div class="dialog-error" hidden></div>
+      <button class="button strong" type="submit">Void and suggest replacement</button>
+    </form>
   </dialog>
   <dialog id="evidence-dialog" class="wide-dialog">
     <form id="evidence-form" class="dialog-form">

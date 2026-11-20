@@ -7,7 +7,7 @@ from typing import Any
 from flask import Flask, Response, jsonify, request, send_file
 from werkzeug.exceptions import BadRequest, RequestEntityTooLarge, UnsupportedMediaType
 
-from . import calibration_preview, comparison, exchange, lots, measurements, plates, probe, recipes, reports, workspaces
+from . import calibration_preview, comparison, exchange, lots, measurements, plates, probe, recipes, reports, sampling, workspaces
 from .captures import (
     SURFACES, image_etag, ingest_inspection, ingest_reference, select_references,
 )
@@ -347,6 +347,28 @@ def create_app(data_folder: str | None = None) -> Flask:
     def point_csv(inspection_id):
         selection = probe.load(db, inspection_id, probe_inputs())
         return binary(probe.csv_projection(selection), "text/csv", name="endgrain-pixel-probe.csv")
+
+    @app.get("/api/inspections/<inspection_id>/sampling")
+    def sampling_plan(inspection_id):
+        return jsonify(sampling.load(db, inspection_id))
+
+    @app.post("/api/inspections/<inspection_id>/sampling")
+    def create_sampling_plan(inspection_id):
+        return jsonify(sampling.plan(db, inspection_id, read_document())), 201
+
+    @app.post("/api/inspections/<inspection_id>/sampling/station")
+    def mark_sampling_station(inspection_id):
+        return jsonify(sampling.mark(db, inspection_id, read_document()))
+
+    @app.get("/api/inspections/<inspection_id>/sampling/plan.png")
+    def sampling_image(inspection_id):
+        revision = request.args.get("r", type=int)
+        name = f"endgrain-stations-r{revision or 0}.png" if request.args.get("download") == "1" else None
+        return binary(sampling.plan_png(db, inspection_id), "image/png", name=name)
+
+    @app.get("/api/inspections/<inspection_id>/sampling/plan.csv")
+    def sampling_table(inspection_id):
+        return binary(sampling.plan_csv(db, inspection_id), "text/csv", name=f"endgrain-stations-{inspection_id[:8]}.csv")
 
     @app.get("/api/recipes")
     def list_recipes():

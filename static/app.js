@@ -1,5 +1,6 @@
 import {WorkbenchViewer} from "./viewer.js";
 import {enterLots, enterRecipes, showProbe, wireExtras} from "./extras.js";
+import {acceptFace, renderSamplingPanel, renderSamplingPlan, wireSampling} from "./sampling.js";
 import {
   button, createToolInput, displayValue, el, link, metricCards, notices,
   objectTable, plot, shortTime, table,
@@ -12,7 +13,7 @@ const state = {
   runs: [], notes: [], selectedRun: null, tool: "rings", settings: {},
   view: "inspect", image: "working", drawing: null, marker: null,
   transect: null, swatches: null, footprintSeed: null, edgeCorners: null,
-  selectionEpoch: 0, queryEpoch: 0,
+  sampling: null, selectionEpoch: 0, queryEpoch: 0,
 };
 
 const viewer = new WorkbenchViewer(coordinate);
@@ -125,6 +126,7 @@ function clearGeometry() {
   state.footprintSeed = null;
   state.edgeCorners = null;
   state.marker = null;
+  state.sampling = null;
   $("#manual-crossings").value = "";
 }
 
@@ -132,7 +134,10 @@ async function openInspection(inspectionId, activate = false) {
   const epoch = ++state.selectionEpoch;
   status();
   const path = "/api/inspections/" + inspectionId;
-  const [record, runData, notes] = await Promise.all([api(path), api(path + "/runs"), api(path + "/notes")]);
+  const [record, runData, notes, sampling] = await Promise.all([
+    api(path), api(path + "/runs"), api(path + "/notes"),
+    api(path + "/sampling").catch(() => ({plan: null})),
+  ]);
   if (epoch !== state.selectionEpoch) return;
   if (state.current?.id !== inspectionId || state.current.revision !== record.revision) {
     clearGeometry();
@@ -143,6 +148,10 @@ async function openInspection(inspectionId, activate = false) {
   state.runs = runData.items;
   state.notes = notes.items;
   state.selectedRun = state.runs.find(item => item.revision === record.revision) || null;
+  state.sampling = {
+    ...(state.sampling?.faces ? {faces: state.sampling.faces, minimums: state.sampling.minimums} : {}),
+    plan: sampling?.plan ? sampling : null,
+  };
   state.image = "working";
   if (activate) state.view = "inspect";
   $("#report-title").value = record.title + " inspection";
@@ -164,7 +173,10 @@ function setView(view) {
 }
 
 function extrasContext() {
-  return {state, api, bindForm, json, notify, showDialog, openInspection};
+  return {
+    state, api, bindForm, json, notify, showDialog, openInspection, renderImage, startDrawing,
+    showSamplingPlan: () => { renderSamplingPlan(extrasContext()); showDialog("#sampling-dialog"); },
+  };
 }
 
 function enterPanel() {
@@ -193,6 +205,7 @@ function renderAll() {
     renderHistory();
     renderResults();
     renderNotes();
+    renderSamplingPanel(extrasContext());
     renderImage();
   } else if (active === "compare") {
     renderCompareSelectors();
@@ -347,10 +360,14 @@ function renderImage() {
   });
   const sizes = ["source", "gain"].includes(mode) ? [plane.source_width, plane.source_height] : [plane.width, plane.height];
   $("#plane-label").textContent = sizes.join(" × ") + " px" + (mode === "working" || mode === "result" ? " · " + plane.unit : "");
+  const sampling = state.sampling;
   viewer.show({
     url, title, mode, plane, drawing: state.drawing, region: record.state.region,
     notes: showResult && resultRun.revision !== record.revision ? [] : state.notes,
     guide: state.tool === "rings" ? state.transect : null,
+    faces: sampling?.plan ? sampling.plan.plan.config.faces.map(item => ({id: item.id, polygon: item.polygon})) : [],
+    stations: sampling?.plan ? sampling.plan.plan.stations : [],
+    sampleFaces: state.sampling?.faces ?? {},
   });
 }
 
@@ -462,6 +479,13 @@ async function finishDrawing() {
     if (calibration.mode === "ruler") [calibration.a, calibration.b] = items;
     else calibration.corners = items;
     await change({calibration}, "Calibration saved");
+    return;
+  }
+  if (draw.kind === "sample-face") {
+    state.drawing = null;
+    acceptFace(extrasContext(), items, draw.face);
+    renderSetup();
+    renderImage();
     return;
   }
   if (draw.kind === "rings") state.transect = items;
@@ -795,6 +819,7 @@ function wire() {
 async function boot() {
   wire();
   wireExtras(extrasContext());
+  wireSampling(extrasContext());
   const catalogue = await api("/api/tools");
   state.tools = new Map(catalogue.tools.map(tool => [tool.id, tool]));
   await reloadLibrary();

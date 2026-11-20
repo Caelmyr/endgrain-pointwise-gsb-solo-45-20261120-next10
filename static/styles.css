@@ -239,3 +239,30 @@ dialog::backdrop { background:#2630208c; }
  .lot-inputs { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .probe-content { grid-template-columns:1fr; }
 }
+
+.sampling-faces { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 9px; }
+.sampling-faces .button { min-height:28px; padding:5px 7px; font-size:11px; }
+.sampling-faces .text-link { color:var(--green); background:none; border:0; font-size:11px; padding:0; text-decoration:underline; }
+.sampling-faces-state { display:grid; gap:4px; font-size:11px; color:var(--muted); margin-bottom:9px; }
+.sampling-faces-state p { margin:0; }
+.sampling-faces-state strong { color:var(--green-dark); font-weight:650; }
+.sampling-state { display:grid; gap:5px; margin-top:10px; font-size:11px; }
+.sampling-state .shortfall { color:#8a442f; font-weight:650; }
+.sampling-state .meta { color:var(--muted); }
+.sampling-state ul { margin:0; padding-left:15px; color:var(--muted); }
+.sampling-state li + li { margin-top:3px; }
+#sampling-links { margin-top:8px; }
+#sampling-links .button { font-size:11px; min-height:27px; padding:5px 7px; }
+.station-map { display:block; width:100%; max-height:52vh; object-fit:contain; border:1px solid var(--line); border-radius:5px; background:#22261f; }
+.station-legend { display:flex; flex-wrap:wrap; gap:11px; font-size:11px; color:var(--muted); margin:8px 0 0; }
+.station-legend i { display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:4px; vertical-align:-1px; border:2px solid; }
+.station-list { display:grid; gap:4px; margin-top:9px; max-height:240px; overflow:auto; }
+.station-row { display:grid; grid-template-columns:52px 62px 1fr; align-items:center; gap:6px; padding:4px 0; border-top:1px solid var(--line); font-size:11px; }
+.station-row .station-id { font-weight:700; font-variant-numeric:tabular-nums; }
+.station-row .station-state { color:var(--muted); text-transform:capitalize; }
+.station-row .station-state.void { color:#9a4a33; }
+.station-row .station-state.shot { color:#3d6d7d; }
+.station-row .station-where { color:var(--muted); font-variant-numeric:tabular-nums; }
+.station-actions { display:flex; gap:4px; justify-self:end; }
+.station-actions .button { min-height:24px; padding:3px 6px; font-size:10px; }
+.station-note { font-size:11px; color:#8a442f; }
